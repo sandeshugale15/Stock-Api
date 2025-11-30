@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MarketDataPoint } from '../types';
 
@@ -10,12 +10,14 @@ interface MarketChartProps {
 
 const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive }) => {
   const [data, setData] = useState<MarketDataPoint[]>([]);
+  const lastPriceRef = useRef<number>(basePrice);
 
-  // Generate initial mock intraday data based on the base price
+  // Initialize data when symbol changes
   useEffect(() => {
     const initialData: MarketDataPoint[] = [];
     const now = new Date();
     let currentPrice = basePrice;
+    lastPriceRef.current = basePrice;
     
     // Create 50 points leading up to now
     for (let i = 50; i > 0; i--) {
@@ -30,7 +32,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive
       });
     }
     setData(initialData);
-  }, [basePrice, symbol]);
+  }, [symbol]); // Only re-run when symbol changes, ignore basePrice updates to prevent reset
 
   // Simulate real-time ticking
   useEffect(() => {
@@ -38,10 +40,11 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive
       setData(prevData => {
         if (prevData.length === 0) return prevData;
         
-        const lastPrice = prevData[prevData.length - 1].value;
-        const volatility = lastPrice * 0.0005; // Smaller volatility for live ticks
+        // Use the last internal price to ensure continuity
+        const lastInternalPrice = prevData[prevData.length - 1].value;
+        const volatility = lastInternalPrice * 0.0005; // Smaller volatility for live ticks
         const change = (Math.random() - 0.5) * volatility;
-        const newPrice = Number((lastPrice + change).toFixed(2));
+        const newPrice = Number((lastInternalPrice + change).toFixed(2));
         
         const now = new Date();
         const newPoint = {
@@ -62,7 +65,16 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive
 
   return (
     <div className="w-full h-64 md:h-96 p-4 glass-panel rounded-xl">
-      <h3 className="text-sm text-slate-400 mb-4 font-medium uppercase tracking-wider">Live Performance</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-sm text-slate-400 font-medium uppercase tracking-wider">Live Performance</h3>
+        <span className="flex items-center gap-2 text-xs text-slate-500">
+          <span className="relative flex h-2 w-2">
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isPositive ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isPositive ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+          </span>
+          Live
+        </span>
+      </div>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
           <defs>
@@ -88,11 +100,13 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => `$${value.toFixed(2)}`}
+            width={60}
           />
           <Tooltip 
-            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px' }}
             itemStyle={{ color: '#f8fafc' }}
             formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
+            labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
           />
           <Area 
             type="monotone" 
@@ -101,7 +115,7 @@ const MarketChart: React.FC<MarketChartProps> = ({ symbol, basePrice, isPositive
             fillOpacity={1} 
             fill={`url(#${gradientId})`} 
             strokeWidth={2}
-            isAnimationActive={false} // Disable animation for smoother real-time ticking
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
